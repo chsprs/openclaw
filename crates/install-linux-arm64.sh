@@ -98,12 +98,17 @@ if [ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ]; then
 fi
 
 echo "==> Installing the Gateway service..."
+# `--config` is mandatory here: the service step may run under sudo, which
+# rewrites HOME to /root, so a config discovered by HOME lookup would be missed.
+# OPENCLAW_STATE_DIR is passed too, so the service unit points at the same state.
 if [ "$DRY_RUN" -eq 1 ]; then
-    echo "    [dry-run] ${PREFIX}/bin/openclaw gateway install $([ "$SERVICE_USER" -eq 1 ] && echo --user)"
+    echo "    [dry-run] ${PREFIX}/bin/openclaw gateway install --config ${CONFIG_PATH} $([ "$SERVICE_USER" -eq 1 ] && echo --user)"
 elif [ "$SERVICE_USER" -eq 1 ]; then
-    "${PREFIX}/bin/openclaw" gateway install --user
+    OPENCLAW_STATE_DIR="${STATE_DIR}" \
+        "${PREFIX}/bin/openclaw" gateway install --config "${CONFIG_PATH}" --user
 else
-    sudo -E "${PREFIX}/bin/openclaw" gateway install
+    sudo -E OPENCLAW_STATE_DIR="${STATE_DIR}" \
+        "${PREFIX}/bin/openclaw" gateway install --config "${CONFIG_PATH}"
 fi
 
 echo ""

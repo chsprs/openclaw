@@ -251,14 +251,23 @@ fn run_gateway_install(args: &[String]) -> Result<(), Box<dyn std::error::Error>
     while i < args.len() {
         match args[i].as_str() {
             "--config" => {
-                config_path_arg = args.get(i + 1).cloned();
+                let value = args.get(i + 1).ok_or("--config needs a path")?;
+                config_path_arg = Some(value.clone());
                 i += 2;
             }
             "--user" => {
                 user = true;
                 i += 1;
             }
-            _ => i += 1,
+            other => {
+                // Silently skipping unknown flags made `--force`/`--json` look
+                // honored while doing nothing.
+                return Err(format!(
+                    "unknown gateway install option: {other}\n\
+                     supported: --config <path>, --user"
+                )
+                .into());
+            }
         }
     }
 

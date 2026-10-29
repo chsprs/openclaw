@@ -125,7 +125,7 @@ export ANTHROPIC_API_KEY=...   # or OPENAI_API_KEY
 ```bash
 cd crates
 cargo build --workspace --offline     # 0 warnings
-cargo test  --workspace --offline     # 63 suites, 311 tests
+cargo test  --workspace --offline     # 64 suites, 315 tests
 ```
 
 Tests use isolated temporary state directories and ephemeral ports; they never

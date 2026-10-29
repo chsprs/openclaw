@@ -169,32 +169,137 @@ loaded service), so scripts can branch.
 
 ## Linux ARM64 (aarch64)
 
-An installer script is provided at `crates/install-linux-arm64.sh`:
+### Which branch to clone
+
+The `crates-only` branch contains **only** `crates/`, so `git clone` is small:
 
 ```bash
+git clone --branch crates-only --depth 1 https://github.com/chsprs/openclaw.git openclaw-rust
+cd openclaw-rust/crates
+```
+
+`--branch rust` also works but downloads the entire upstream tree (61k+ files).
+
+### Prerequisites on the server
+
+Debian/Ubuntu on aarch64:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential pkg-config curl git ca-certificates
+```
+
+`build-essential` is required: `rusqlite` builds a bundled SQLite from C source,
+so a C compiler and linker must exist. Without it the build fails inside
+`libsqlite3-sys`.
+
+Install Rust if absent:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+. "$HOME/.cargo/env"
+rustc --version    # need 1.93 or newer
+```
+
+### Build natively
+
+On the ARM server itself, no cross-compilation is needed:
+
+```bash
+cargo build --release --locked -p openclaw-cli -p openclaw-node-host
+```
+
+Confirm the binary really is ARM64 before trusting it:
+
+```bash
+file target/release/openclaw
+# expect: ELF 64-bit LSB ... ARM aarch64
+```
+
+Rough resource use: ~2 GB disk for `target/`, and a release build takes a while on
+a Raspberry Pi-class board.
+
+### Option A — run the installer
+
+```bash
+cd crates
+chmod +x install-linux-arm64.sh
 ./install-linux-arm64.sh --prefix /usr/local --state-dir /var/lib/openclaw
 ```
 
-It builds natively for the detected architecture (`aarch64`/`arm64` or
-`x86_64`/`amd64`), installs the binaries, copies skills, runs onboarding if no
-config exists, and delegates service installation to
-`openclaw gateway install`. Unsupported architectures exit `1`.
+What it does, in order:
 
-Flags: `--prefix <dir>`, `--state-dir <dir>`, `--user`, `--dry-run`.
+1. Verifies `uname -m` is `aarch64`/`arm64` (or `x86_64`/`amd64`), else exits `1`.
+2. Installs Rust if `cargo` is missing.
+3. `cargo build --release --locked`.
+4. Installs `openclaw` and `openclaw-node` into `<prefix>/bin`.
+5. Copies `skills/` and `custodian-skills/` into `<prefix>/share/openclaw` if present.
+6. Creates the state dir and runs `onboard` when no config exists yet.
+7. Runs `openclaw gateway install --config <resolved path>` (add `--user` for a
+   user unit). The explicit `--config` matters: the service step runs under
+   `sudo`, which changes `HOME` to `/root`.
 
-**This script has not been executed on ARM64 in this repository's environment.**
-The host used for development has no ARM64 target installed and WSL is disabled,
-so ARM64 is unverified. Treat it as untested tooling, not a supported platform
-claim.
+Add `--dry-run` first to see every action without changing anything.
 
-To build manually for ARM64:
+### Option B — manual, step by step
 
 ```bash
-rustup target add aarch64-unknown-linux-gnu
-cargo build --release --locked --target aarch64-unknown-linux-gnu -p openclaw-cli
+sudo install -d /usr/local/bin /var/lib/openclaw
+sudo install -m 0755 target/release/openclaw      /usr/local/bin/openclaw
+sudo install -m 0755 target/release/openclaw-node /usr/local/bin/openclaw-node
+
+# config + token, written into the state dir
+sudo env OPENCLAW_STATE_DIR=/var/lib/openclaw /usr/local/bin/openclaw onboard
+
+# read the generated token
+sudo env OPENCLAW_STATE_DIR=/var/lib/openclaw openclaw config get gateway.auth.token
+
+# install and start the service
+sudo OPENCLAW_STATE_DIR=/var/lib/openclaw \
+  openclaw gateway install --config /var/lib/openclaw/openclaw.json
 ```
 
-You need a cross-linker (`gcc-aarch64-linux-gnu`) for that target.
+### Reaching it from your laptop
+
+The default config binds `127.0.0.1`, which is correct for a server you reach
+over SSH. Forward the ports instead of exposing them:
+
+```bash
+ssh -L 18789:127.0.0.1:18789 -L 18790:127.0.0.1:18790 user@arm-server
+```
+
+Then open `http://127.0.0.1:18790/` locally and paste the Gateway token.
+
+If you must bind publicly, authentication is mandatory:
+
+```bash
+openclaw config set gateway.listen 0.0.0.0:18789
+openclaw config set gateway.auth.mode token
+# token must already be set, or validation refuses to start
+sudo systemctl restart openclaw-gateway.service
+```
+
+A non-loopback listener with `auth.mode: "none"` is rejected at startup by design.
+
+### Verify the install
+
+```bash
+openclaw version
+openclaw gateway status --json     # exit 0 only when reachable
+sudo systemctl status openclaw-gateway.service
+journalctl -u openclaw-gateway.service -n 50 --no-pager
+```
+
+### ARM64 is unverified here
+
+The installer and the ARM64 build have **not been executed** in the environment
+where this code was written: no aarch64 target is installed there and WSL is
+disabled. The instructions above are derived from the script and the code paths,
+not from a successful run on ARM hardware. Expect to debug, and please report
+what breaks.
+
+Cross-compiling from x86_64 is possible but not covered here; you would need
+`gcc-aarch64-linux-gnu` and `CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER`.
 
 ## Containers
 

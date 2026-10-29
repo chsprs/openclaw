@@ -112,7 +112,7 @@ sudo systemctl start openclaw-gateway.service
 
 ```bash
 cd crates
-cargo test --workspace --offline     # expect: 63 suites, 311 tests, exit 0
+cargo test --workspace --offline     # expect: 64 suites, 315 tests, exit 0
 ./target/release/openclaw version
 ./target/release/openclaw help       # the "NOT IMPLEMENTED YET" list must match parity-commands.tsv
 ```
