@@ -1,0 +1,10 @@
+# Gateway protocol versions, recorded from
+# packages/gateway-protocol/src/version.ts (upstream commit fd0403b4).
+#
+# This snapshot exists so a crates/-only tree builds reproducibly without the
+# full upstream checkout. When the full checkout is present, build.rs reads
+# version.ts and this file is ignored. Update both together.
+PROTOCOL_VERSION	4
+MIN_CLIENT_PROTOCOL_VERSION	4
+MIN_NODE_PROTOCOL_VERSION	3
+MIN_PROBE_PROTOCOL_VERSION	3
